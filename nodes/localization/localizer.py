@@ -84,6 +84,16 @@ class Localizer:
         current_velocity_msg.twist.linear.x = velocity
         self.current_velocity_pub.publish(current_velocity_msg)
 
+        # create a transform message
+        t = TransformStamped()
+        t.header.frame_id = "map"
+        t.header.stamp = msg.header.stamp
+        t.child_frame_id = "base_link"
+        t.transform.rotation = current_pose_msg.pose.orientation
+        t.transform.translation  = current_pose_msg.pose.position
+        # publish transform
+        self.br.sendTransform(t)
+
 
 
 
