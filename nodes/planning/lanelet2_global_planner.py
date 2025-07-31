@@ -8,13 +8,22 @@ from lanelet2.core import BasicPoint2d
 from lanelet2.geometry import findNearest
 
 from geometry_msgs.msg import PoseStamped
+from autoware_mini.msg import Waypoint
+from autoware_mini.msg import Path
+
+from math import sqrt
 
 
 class Lanelet2GlobalPlanner:
 
     def __init__(self):
         # Parameters
+        self.speed_limit = rospy.get_param('~speed_limit')
         lanelet2_map_path = rospy.get_param('~lanelet2_map_path')
+        self.output_frame = rospy.get_param('~/planning/lanelet2_global_planner/output_frame')
+        self.distance_to_goal_limit = rospy.get_param('~/planning/lanelet2_global_planner/distance_to_goal_limit')
+        print("Debug, outputframe: ", self.output_frame)
+        print("Debug, speed_limit: ", self.speed_limit)
         self.lanelet2_map = self._load_lanelet2_map(lanelet2_map_path)
         # traffic rules
         traffic_rules = lanelet2.traffic_rules.create(lanelet2.traffic_rules.Locations.Germany,
@@ -26,6 +35,7 @@ class Lanelet2GlobalPlanner:
         self.current_location = None
         
         # Publischers
+        self.waypoints_pub = rospy.Publisher('global_path',Path, queue_size=10)
 
         # Sunbscriers
         rospy.Subscriber('/move_base_simple/goal',PoseStamped,self.goal_pose_callback,queue_size=1)
@@ -33,6 +43,39 @@ class Lanelet2GlobalPlanner:
 
     def run(self):
         rospy.spin()
+
+    def distance(self, first_point: BasicPoint2d , second_point: BasicPoint2d):
+        sqrt((self.first_point.x - self.second_point.x)**2+(self.first_point.y - self.second_point.y)**2) 
+
+    def publish_waypoints(self, waypoints):
+        path = Path()        
+        path.header.frame_id = self.output_frame
+        path.header.stamp = rospy.Time.now()
+        path.waypoints = waypoints
+        self.waypoints_pub.publish(path)
+
+    def from_lanelet_to_sequence_of_waypoints(self, path):
+        waypoints = []
+        for lanelet in path:
+            if 'speed_ref' in lanelet.attributes:
+                print("lanelet: ",float(lanelet.attributes['speed_ref']),"speed_limit: ",self.speed_limit)
+                speed = min(float(lanelet.attributes['speed_ref']), self.speed_limit)
+            else:
+                speed = self.speed_limit
+            print("Choosen speed: ", speed)
+            for point in lanelet.centerline:
+                waypoint = Waypoint()
+                waypoint.position.x = point.x
+                waypoint.position.y = point.y
+                waypoint.position.z = point.z
+                waypoint.speed = speed/3.6
+                
+                if  ((not waypoints ) or (waypoint != waypoints[-1]) ):
+                    waypoints.append(waypoint)
+
+        self.publish_waypoints(waypoints)
+
+        
 
     
     def goal_pose_callback(self, msg: PoseStamped):
@@ -55,7 +98,7 @@ class Lanelet2GlobalPlanner:
             path = route.shortestPath()
             # This returns LaneletSequence to a point where a lane change would be necessary to continue
             path_no_lane_change = path.getRemainingLane(start_lanelet)
-            print("path_no_lane_change: ",path_no_lane_change )
+            self.from_lanelet_to_sequence_of_waypoints(path_no_lane_change)
 
 
     def current_pose_callback(self, msg: PoseStamped):
@@ -64,6 +107,11 @@ class Lanelet2GlobalPlanner:
         #                    msg.pose.orientation.x, msg.pose.orientation.y, msg.pose.orientation.z,
         #                    msg.pose.orientation.w, msg.header.frame_id)
         self.current_location = BasicPoint2d(msg.pose.position.x, msg.pose.position.y)
+        
+        if self.goal_point is not None:
+            if(sqrt((self.goal_point.x - self.current_location.x)**2+(self.goal_point.y - self.current_location.y)**2) < self.distance_to_goal_limit):
+                self.publish_waypoints([])
+                rospy.loginfo("%s - Goal reached",rospy.get_name())
 
 
     # from autoware_mini/lanelet2.py

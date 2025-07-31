@@ -19,6 +19,7 @@ class PurePursuitFollower:
         self.distance_to_velocity_interpolator = None
         self.lookahead_distance = rospy.get_param("~lookahead_distance")
         self.wheel_base = rospy.get_param("/vehicle/wheel_base")
+        self.end_of_track = False
 
         # Publishers
         self.vehicle_cmd_pub = rospy.Publisher('/control/vehicle_cmd',VehicleCmd,queue_size=10)
@@ -33,17 +34,20 @@ class PurePursuitFollower:
         prepare(self.path_linestring)
         # Create a distance-to-velocity interpolator for the path
         # collect waypoint x and y coordinates
-        waypoints_xy = np.array([(w.position.x, w.position.y) for w in msg.waypoints])
-        # Calculate distances between points
-        distances = np.cumsum(np.sqrt(np.sum(np.diff(waypoints_xy, axis=0)**2, axis=1)))
-        # add 0 distance in the beginning
-        distances = np.insert(distances, 0, 0)
-        # Extract velocity values at waypoints
-        velocities = np.array([w.speed for w in msg.waypoints])
-        self.distance_to_velocity_interpolator = interp1d(distances, velocities, kind='linear')
-        self.distance_to_velocity_interpolator.bounds_error = True
-        self.distance_to_velocity_interpolator.fill_value = 0.0
-
+        if (msg.waypoints):
+            waypoints_xy = np.array([(w.position.x, w.position.y) for w in msg.waypoints])
+            # Calculate distances between points
+            distances = np.cumsum(np.sqrt(np.sum(np.diff(waypoints_xy, axis=0)**2, axis=1)))
+            # add 0 distance in the beginning
+            distances = np.insert(distances, 0, 0)
+            # Extract velocity values at waypoints
+            velocities = np.array([w.speed for w in msg.waypoints])
+            self.distance_to_velocity_interpolator = interp1d(distances, velocities, kind='linear')
+            self.distance_to_velocity_interpolator.bounds_error = True
+            self.distance_to_velocity_interpolator.fill_value = 0.0
+        else:
+            self.end_of_track = True
+            
 
     def current_pose_callback(self, msg : PoseStamped):
         vehicle_cmd = VehicleCmd()
@@ -51,7 +55,7 @@ class PurePursuitFollower:
         vehicle_cmd.header.frame_id = "base_link"
         
         current_pose = Point([msg.pose.position.x, msg.pose.position.y])
-        if (self.path_linestring is not None and self.distance_to_velocity_interpolator is not None):
+        if (self.path_linestring is not None and self.distance_to_velocity_interpolator is not None and not self.end_of_track):
             d_ego_from_path_start = self.path_linestring.project(current_pose)
             target_lookahead_distance_on_path = d_ego_from_path_start + self.lookahead_distance
             lookahead_point = self.path_linestring.interpolate(target_lookahead_distance_on_path)
