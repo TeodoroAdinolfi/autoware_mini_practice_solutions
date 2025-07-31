@@ -57,11 +57,14 @@ class PurePursuitFollower:
             lookahead_point = self.path_linestring.interpolate(target_lookahead_distance_on_path)
             _, _, heading = euler_from_quaternion([msg.pose.orientation.x, msg.pose.orientation.y, msg.pose.orientation.z, msg.pose.orientation.w])
             lookahead_heading = np.arctan2(lookahead_point.y - current_pose.y, lookahead_point.x - current_pose.x)
-            self.lookahead_distance = distance(current_pose,lookahead_point)
-            steering_anle = np.arctan( (2*self.wheel_base*sin(lookahead_heading - heading))/self.lookahead_distance)
+            new_lookahead_distance = distance(current_pose,lookahead_point)
+            steering_anle = np.arctan( (2*self.wheel_base*sin(lookahead_heading - heading))/new_lookahead_distance)
             vehicle_cmd.ctrl_cmd.steering_angle = steering_anle
             vehicle_cmd.ctrl_cmd.linear_velocity = self.distance_to_velocity_interpolator(d_ego_from_path_start)
-            self.vehicle_cmd_pub.publish(vehicle_cmd)
+        else:
+                vehicle_cmd.ctrl_cmd.linear_velocity = 0
+        
+        self.vehicle_cmd_pub.publish(vehicle_cmd)
 
     def run(self):
         rospy.spin()
