@@ -6,6 +6,9 @@ from lanelet2.io import Origin, load
 from lanelet2.projection import UtmProjector
 from lanelet2.core import BasicPoint2d
 from lanelet2.geometry import findNearest
+from lanelet2.geometry import distance
+
+from shapely.geometry import LineString, Point
 
 from geometry_msgs.msg import PoseStamped
 from autoware_mini.msg import Waypoint
@@ -72,7 +75,20 @@ class Lanelet2GlobalPlanner:
                 
                 if  ((not waypoints ) or (waypoint != waypoints[-1]) ):
                     waypoints.append(waypoint)
+        # Checking what point is theclosest one to the end
+        if (self.goal_point and len(waypoints) >=2):
+            path = LineString([(w.position.x,w.position.y) for w in waypoints ])
 
+            goal_proj = path.project(Point(self.goal_point.x, self.goal_point.y))
+            nearest_point_to_goal_on_lanelet = path.interpolate(goal_proj)
+
+            last_waypoint = Waypoint()
+            last_waypoint.position.x = nearest_point_to_goal_on_lanelet.x
+            last_waypoint.position.y = nearest_point_to_goal_on_lanelet.y
+            last_waypoint.position.z = waypoints[-1].position.z
+            last_waypoint.speed = waypoints[-1].speed
+            waypoints[-1] = last_waypoint
+        #
         self.publish_waypoints(waypoints)
 
         
@@ -108,10 +124,9 @@ class Lanelet2GlobalPlanner:
         #                    msg.pose.orientation.w, msg.header.frame_id)
         self.current_location = BasicPoint2d(msg.pose.position.x, msg.pose.position.y)
         
-        if self.goal_point is not None:
-            if(sqrt((self.goal_point.x - self.current_location.x)**2+(self.goal_point.y - self.current_location.y)**2) < self.distance_to_goal_limit):
-                self.publish_waypoints([])
-                rospy.loginfo("%s - Goal reached",rospy.get_name())
+        if self.goal_point is not None and (sqrt((self.goal_point.x - self.current_location.x)**2+(self.goal_point.y - self.current_location.y)**2) < self.distance_to_goal_limit):
+            self.publish_waypoints([])
+            rospy.loginfo("%s - Goal reached",rospy.get_name())
 
 
     # from autoware_mini/lanelet2.py

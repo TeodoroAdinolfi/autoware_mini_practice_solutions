@@ -1,0 +1,8 @@
+After successfully acquiring all the waypoints within the from_lanelet_to_sequence_of_waypoints function, the process continues to ensure the path's end precisely aligns with the self.goal_point.
+To achieve this, the following steps are taken:
+    
+    Project Goal Point onto Path: First, we determine the distance along the generated path (composed of all waypoints) to where the projection of self.goal_point lies. We can call this the goal_proj distance. This uses geometric projection to find the closest point on the path to the user's intended goal.
+
+    Identify Nearest Point on Path: we retrieve the exact coordinates on the path that correspond to this goal_proj distance. Let's refer to this as nearest_point_to_goal_on_lanelet. This point represents the precise location on the path that is closest to self.goal_point.
+
+    Replace Last Waypoint: we replace the very last waypoint in our generated list of waypoints with the coordinates of nearest_point_to_goal_on_lanelet. This effectively truncates any excess waypoints that might have extended beyond the goal's projection within the last lanelet and ensures the path ends exactly where the goal point is projected.
