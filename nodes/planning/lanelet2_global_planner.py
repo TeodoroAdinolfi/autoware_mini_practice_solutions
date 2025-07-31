@@ -13,14 +13,24 @@ from geometry_msgs.msg import PoseStamped
 class Lanelet2GlobalPlanner:
 
     def __init__(self):
-        pass
         # Parameters
-
+        lanelet2_map_path = rospy.get_param('~lanelet2_map_path')
+        self.lanelet2_map = self._load_lanelet2_map(lanelet2_map_path)
+        # traffic rules
+        traffic_rules = lanelet2.traffic_rules.create(lanelet2.traffic_rules.Locations.Germany,
+                                                lanelet2.traffic_rules.Participants.VehicleTaxi)
+        # routing graph
+        self.graph = lanelet2.routing.RoutingGraph(self.lanelet2_map, traffic_rules)
+        
+        self.goal_point = None
+        self.current_location = None
+        
         # Publischers
 
         # Sunbscriers
         rospy.Subscriber('/move_base_simple/goal',PoseStamped,self.goal_pose_callback,queue_size=1)
-        
+        rospy.Subscriber('/localization/current_pose',PoseStamped, self.current_pose_callback, queue_size=1)
+
     def run(self):
         rospy.spin()
 
@@ -31,10 +41,33 @@ class Lanelet2GlobalPlanner:
                             msg.pose.position.x, msg.pose.position.y, msg.pose.position.z,
                             msg.pose.orientation.x, msg.pose.orientation.y, msg.pose.orientation.z,
                             msg.pose.orientation.w, msg.header.frame_id)
+        self.goal_point =  BasicPoint2d(msg.pose.position.x, msg.pose.position.y)
+        if self.current_location is not None:
+            # get start and end lanelets
+            start_lanelet = findNearest(self.lanelet2_map.laneletLayer, self.current_location, 1)[0][1]
+            goal_lanelet = findNearest(self.lanelet2_map.laneletLayer, self.goal_point, 1)[0][1]
+            # find routing graph
+            route = self.graph.getRoute(start_lanelet, goal_lanelet, 0, True)
+            if route is None:
+                rospy.logwarn("%s - No route found for reaching the goal position",rospy.get_name())
+                return None
+            # find shortest path
+            path = route.shortestPath()
+            # This returns LaneletSequence to a point where a lane change would be necessary to continue
+            path_no_lane_change = path.getRemainingLane(start_lanelet)
+            print("path_no_lane_change: ",path_no_lane_change )
+
+
+    def current_pose_callback(self, msg: PoseStamped):
+        #rospy.loginfo("%s - current position (%f, %f, %f) orientation (%f, %f, %f, %f) in %s frame", rospy.get_name(),
+        #                    msg.pose.position.x, msg.pose.position.y, msg.pose.position.z,
+        #                    msg.pose.orientation.x, msg.pose.orientation.y, msg.pose.orientation.z,
+        #                    msg.pose.orientation.w, msg.header.frame_id)
+        self.current_location = BasicPoint2d(msg.pose.position.x, msg.pose.position.y)
 
 
     # from autoware_mini/lanelet2.py
-    def load_lanelet2_map(lanelet2_map_path):
+    def _load_lanelet2_map(self, lanelet2_map_path):
         """
         Load a lanelet2 map from a file and return it
         :param lanelet2_map_path: name of the lanelet2 map file
