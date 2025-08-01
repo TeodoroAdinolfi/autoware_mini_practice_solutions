@@ -25,8 +25,12 @@ class Lanelet2GlobalPlanner:
         lanelet2_map_path = rospy.get_param('~lanelet2_map_path')
         self.output_frame = rospy.get_param('~/planning/lanelet2_global_planner/output_frame')
         self.distance_to_goal_limit = rospy.get_param('~/planning/lanelet2_global_planner/distance_to_goal_limit')
-        print("Debug, outputframe: ", self.output_frame)
-        print("Debug, speed_limit: ", self.speed_limit)
+        self.coordinate_transformer = rospy.get_param("/localization/coordinate_transformer")
+        self.use_custom_origin = rospy.get_param("/localization/use_custom_origin")
+        self.utm_origin_lat = rospy.get_param("/localization/utm_origin_lat")
+        self.utm_origin_lon = rospy.get_param("/localization/utm_origin_lon")
+
+
         self.lanelet2_map = self._load_lanelet2_map(lanelet2_map_path)
         # traffic rules
         traffic_rules = lanelet2.traffic_rules.create(lanelet2.traffic_rules.Locations.Germany,
@@ -36,7 +40,7 @@ class Lanelet2GlobalPlanner:
         
         self.goal_point = None
         self.current_location = None
-        
+        self._goal_reached = False
         # Publischers
         self.waypoints_pub = rospy.Publisher('global_path',Path, queue_size=10)
 
@@ -47,8 +51,6 @@ class Lanelet2GlobalPlanner:
     def run(self):
         rospy.spin()
 
-    def distance(self, first_point: BasicPoint2d , second_point: BasicPoint2d):
-        sqrt((self.first_point.x - self.second_point.x)**2+(self.first_point.y - self.second_point.y)**2) 
 
     def publish_waypoints(self, waypoints):
         path = Path()        
@@ -61,11 +63,10 @@ class Lanelet2GlobalPlanner:
         waypoints = []
         for lanelet in path:
             if 'speed_ref' in lanelet.attributes:
-                print("lanelet: ",float(lanelet.attributes['speed_ref']),"speed_limit: ",self.speed_limit)
                 speed = min(float(lanelet.attributes['speed_ref']), self.speed_limit)
             else:
                 speed = self.speed_limit
-            print("Choosen speed: ", speed)
+
             for point in lanelet.centerline:
                 waypoint = Waypoint()
                 waypoint.position.x = point.x
@@ -101,6 +102,7 @@ class Lanelet2GlobalPlanner:
                             msg.pose.orientation.x, msg.pose.orientation.y, msg.pose.orientation.z,
                             msg.pose.orientation.w, msg.header.frame_id)
         self.goal_point =  BasicPoint2d(msg.pose.position.x, msg.pose.position.y)
+        self._goal_reached = False
         if self.current_location is not None:
             # get start and end lanelets
             start_lanelet = findNearest(self.lanelet2_map.laneletLayer, self.current_location, 1)[0][1]
@@ -118,13 +120,9 @@ class Lanelet2GlobalPlanner:
 
 
     def current_pose_callback(self, msg: PoseStamped):
-        #rospy.loginfo("%s - current position (%f, %f, %f) orientation (%f, %f, %f, %f) in %s frame", rospy.get_name(),
-        #                    msg.pose.position.x, msg.pose.position.y, msg.pose.position.z,
-        #                    msg.pose.orientation.x, msg.pose.orientation.y, msg.pose.orientation.z,
-        #                    msg.pose.orientation.w, msg.header.frame_id)
         self.current_location = BasicPoint2d(msg.pose.position.x, msg.pose.position.y)
-        
-        if self.goal_point is not None and (sqrt((self.goal_point.x - self.current_location.x)**2+(self.goal_point.y - self.current_location.y)**2) < self.distance_to_goal_limit):
+        if self.goal_point is not None and not self._goal_reached and (sqrt((self.goal_point.x - self.current_location.x)**2+(self.goal_point.y - self.current_location.y)**2) < self.distance_to_goal_limit):
+            self._goal_reached = True
             self.publish_waypoints([])
             rospy.loginfo("%s - Goal reached",rospy.get_name())
 
@@ -132,24 +130,12 @@ class Lanelet2GlobalPlanner:
     # from autoware_mini/lanelet2.py
     def _load_lanelet2_map(self, lanelet2_map_path):
         """
-        Load a lanelet2 map from a file and return it
         :param lanelet2_map_path: name of the lanelet2 map file
-        :param coordinate_transformer: coordinate transformer
-        :param use_custom_origin: use custom origin
-        :param utm_origin_lat: utm origin latitude
-        :param utm_origin_lon: utm origin longitude
         :return: lanelet2 map
         """
-
-        # get parameters
-        coordinate_transformer = rospy.get_param("/localization/coordinate_transformer")
-        use_custom_origin = rospy.get_param("/localization/use_custom_origin")
-        utm_origin_lat = rospy.get_param("/localization/utm_origin_lat")
-        utm_origin_lon = rospy.get_param("/localization/utm_origin_lon")
-
         # Load the map using Lanelet2
-        if coordinate_transformer == "utm":
-            projector = UtmProjector(Origin(utm_origin_lat, utm_origin_lon), use_custom_origin, False)
+        if self.coordinate_transformer == "utm":
+            projector = UtmProjector(Origin(self.utm_origin_lat, self.utm_origin_lon), self.use_custom_origin, False)
         else:
             raise ValueError('Unknown coordinate_transformer for loading the Lanelet2 map ("utm" should be used): ' + coordinate_transformer)
 

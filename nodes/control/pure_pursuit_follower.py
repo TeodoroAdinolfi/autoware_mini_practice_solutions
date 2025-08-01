@@ -45,6 +45,7 @@ class PurePursuitFollower:
             self.distance_to_velocity_interpolator = interp1d(distances, velocities, kind='linear')
             self.distance_to_velocity_interpolator.bounds_error = True
             self.distance_to_velocity_interpolator.fill_value = 0.0
+            self.end_of_track = False
         else:
             self.end_of_track = True
             
