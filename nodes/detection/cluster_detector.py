@@ -34,8 +34,7 @@ class ClusterDetector:
     def cluster_callback(self, msg):
         data = numpify(msg)
         points = structured_to_unstructured(data, dtype=np.float32)
-        print("Points shape: ",points.shape)
-        print("Points[0]:", points[0])
+        labels = points[:,3]
         if(msg.header.frame_id != self.output_frame):
             # fetch transform for target frame
             try:
@@ -48,9 +47,38 @@ class ClusterDetector:
                 # transform points to target frame
                 points = points.dot(tf_matrix.T)
                 ####
-                print("tf_matrix: ",tf_matrix.T)
-                print("Points shape afrer transform: ", points.shape)
-                print("First row: ",points[0])
+                detected_object_array = DetectedObjectArray()
+                detected_object_array.header.stamp = msg.header.stamp
+                detected_object_array.header.frame_id = self.output_frame
+                if(points.shape[0] == 0):
+                    self.objects_pub.publish(detected_object_array)
+                else:
+                    cluster_num = int(np.max(labels))
+                    for i in range(0,cluster_num):
+                        mask = (labels == i)
+                        # select points for one object from an array using a mask
+                        # rows are selected using a binary mask, and only the first 3 columns are selected: x, y, and z coordinates
+                        points3d = points[mask,:3]
+                        if(points3d.shape[0] < self.min_cluster_size):
+                            continue
+                        else:
+                            detected_object = DetectedObject()
+                            detected_object.centroid.x = np.mean(points3d[:,0])
+                            detected_object.centroid.y = np.mean(points3d[:,1])
+                            detected_object.centroid.z = np.mean(points3d[:,2])
+                            # create convex hull
+                            points_2d = MultiPoint(points[mask,:2])
+                            hull = points_2d.convex_hull
+                            detected_object.convex_hull = [a for hull in [[x, y, detected_object.centroid.z] for x, y in hull.exterior.coords] for a in hull]
+                            detected_object.label = "unknown"
+                            detected_object.id = i
+                            detected_object.color = BLUE80P
+                            detected_object.valid = True
+                            detected_object.position_reliable = True
+                            detected_object.velocity_reliable = False
+                            detected_object.acceleration_reliable = False
+                            detected_object_array.objects.append(detected_object)
+                    self.objects_pub.publish(detected_object_array)
             except (TransformException, rospy.ROSTimeMovedBackwardsException) as e:
                 rospy.logwarn("%s - %s", rospy.get_name(), e)
             return

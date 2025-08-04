@@ -28,9 +28,7 @@ class PointsClusterer:
     def points_callback(self, msg : PointCloud2):
         data = numpify(msg)
         points = structured_to_unstructured(data[['x', 'y', 'z']], dtype=np.float32)
-        print("Points shape", points.shape)
         labels = self.clusterer.fit_predict(points)
-        print("Labels shape", labels.shape)
         # creating points_labeled a single tensor with filtered rows
         labels_reshaped = labels.reshape(-1, 1)
         combined_tensor = np.concatenate((points, labels_reshaped), axis=1)
