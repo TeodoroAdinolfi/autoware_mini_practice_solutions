@@ -89,16 +89,12 @@ class LocalPathExtractor:
             current_position = Point([current_pose.pose.position.x, current_pose.pose.position.y])
             ego_distance_from_global_path_start = global_path_linestring.project(current_position)
 
-            print("global_path_xyz shape: ", global_path_xyz.shape)
-
+            
             deltas = np.diff(global_path_xyz[:,:2], axis=0)
             rel_distances = np.linalg.norm(deltas,axis=1)
             global_path_distances = np.insert(np.cumsum(rel_distances),0,0.0)
 
-            print("global_path_distances shape: ", global_path_distances.shape)
-            print("global_path_velocities shape: ", global_path_velocities.shape)
-
-            global_path_velocities_interpolator = interp1d(x=global_path_distances,y=global_path_velocities)
+            global_path_velocities_interpolator = interp1d(x=global_path_distances,y=global_path_velocities,kind='linear',bounds_error=False,fill_value=(global_path_velocities[0],global_path_velocities[-1]))
 
             # extract local path using distances and velocities interpolator
             local_path_waypoints = self.extract_waypoints(global_path_linestring, global_path_distances, ego_distance_from_global_path_start, self.local_path_length, global_path_velocities_interpolator)
