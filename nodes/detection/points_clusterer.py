@@ -17,7 +17,7 @@ class PointsClusterer:
         self.cluster_epsilon  = rospy.get_param("~/detection/lidar/points_clusterer/cluster_epsilon")
         self.cluster_min_size = rospy.get_param("~/detection/lidar/points_clusterer/cluster_min_size")
         # Internal Variables
-        self.clusterer = DBSCAN(self.cluster_epsilon,self.cluster_min_size)
+        self.clusterer = DBSCAN(eps= self.cluster_epsilon,min_samples = self.cluster_min_size)
         # Publishers
         self.points_clustered_pub = rospy.Publisher('/detection/lidar/points_clustered',PointCloud2,queue_size=1,tcp_nodelay=True)
 
