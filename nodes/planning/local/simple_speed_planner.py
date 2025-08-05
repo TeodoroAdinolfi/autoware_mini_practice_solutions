@@ -74,6 +74,7 @@ class SpeedPlanner:
             
             min_vel = float('inf')
             min_distance = float('inf')
+            collision_point_velocities = []
             for point in collision_points:
                 distance = local_path_linestring.project(Point(point['x'],point['y'])) - self.distance_to_car_front - point['distance_to_stop']
                 vel = math.sqrt(max(0,2*self.default_deceleration*distance))
@@ -81,7 +82,11 @@ class SpeedPlanner:
                     min_vel = vel
                     min_distance = distance
                     min_category = point['category']
-            
+                heading = self.get_heading_at_distance(local_path_linestring,distance)
+                velocity_vector = Vector3(point['vx'],point['vy'],point['vz'])
+                velocity_at_heading = self.project_vector_to_heading(heading,velocity_vector)
+                collision_point_velocities.append(velocity_at_heading)
+                print("Velocity vector: ", math.sqrt(velocity_vector.x**2+velocity_vector.y**2+velocity_vector.z**2),"Velocity at heading: ",velocity_at_heading)
             for i, wp in enumerate(local_path_msg.waypoints):
                 wp.speed = min(min_vel, wp.speed)
             # Update the lane message with the calculated values
