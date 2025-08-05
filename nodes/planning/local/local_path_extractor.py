@@ -9,6 +9,7 @@ import numpy as np
 from scipy.interpolate import interp1d
 from autoware_mini.msg import Path, Waypoint
 from geometry_msgs.msg import PoseStamped
+from shapely.geometry import Point
 
 class LocalPathExtractor:
 
@@ -64,45 +65,51 @@ class LocalPathExtractor:
                                      traceback.format_exc())
 
    def extract_local_path(self, _):
-       try:
-           with self.lock:
-               current_pose = self.current_pose
-               global_path_xyz = self.global_path_xyz
-               global_path_linestring = self.global_path_linestring
-               global_path_velocities = self.global_path_velocities
+        try:
+            with self.lock:
+                current_pose = self.current_pose
+                global_path_xyz = self.global_path_xyz
+                global_path_linestring = self.global_path_linestring
+                global_path_velocities = self.global_path_velocities
 
-           if current_pose is None:
-               return
+            if current_pose is None:
+                return
 
-           local_path = Path()
-           local_path.header = current_pose.header
+            local_path = Path()
+            local_path.header = current_pose.header
+            
+            
 
-           print('Current pose:', current_pose.pose.position.x, current_pose.pose.position.y, current_pose.pose.position.z)
-           self.local_path_pub.publish(local_path)
-           return
+            if global_path_xyz is None:
+                self.local_path_pub.publish(local_path)
+                return
+            
+            
 
-           if global_path_xyz is None:
-               self.local_path_pub.publish(local_path)
-               return
-              
-           current_position = None
+            current_position = Point([current_pose.pose.position.x, current_pose.pose.position.y])
+            ego_distance_from_global_path_start = global_path_linestring.project(current_position)
 
-           ego_distance_from_global_path_start = None
+            print("global_path_xyz shape: ", global_path_xyz.shape)
 
-           global_path_distances = None
+            deltas = np.diff(global_path_xyz[:,:2], axis=0)
+            rel_distances = np.linalg.norm(deltas,axis=1)
+            global_path_distances = np.insert(np.cumsum(rel_distances),0,0.0)
 
-           global_path_velocities_interpolator = None
+            print("global_path_distances shape: ", global_path_distances.shape)
+            print("global_path_velocities shape: ", global_path_velocities.shape)
 
-           # extract local path using distances and velocities interpolator
-           local_path_waypoints = self.extract_waypoints(global_path_linestring, global_path_distances, ego_distance_from_global_path_start, self.local_path_length, global_path_velocities_interpolator)
+            global_path_velocities_interpolator = interp1d(x=global_path_distances,y=global_path_velocities)
 
-           local_path = Path()
-           local_path.header = current_pose.header
-           local_path.waypoints = local_path_waypoints
+            # extract local path using distances and velocities interpolator
+            local_path_waypoints = self.extract_waypoints(global_path_linestring, global_path_distances, ego_distance_from_global_path_start, self.local_path_length, global_path_velocities_interpolator)
 
-           self.local_path_pub.publish(local_path)
-       except Exception as e:
-           rospy.logerr_throttle(10, "%s - Exception in callback: %s", rospy.get_name(), traceback.format_exc())
+            local_path = Path()
+            local_path.header = current_pose.header
+            local_path.waypoints = local_path_waypoints
+
+            self.local_path_pub.publish(local_path)
+        except Exception as e:
+            rospy.logerr_throttle(10, "%s - Exception in callback: %s", rospy.get_name(), traceback.format_exc())
 
 
    def extract_waypoints(self, global_path_linestring, global_path_distances, d_ego_from_path_start, local_path_length, global_path_velocities_interpolator):
