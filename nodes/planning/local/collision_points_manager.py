@@ -75,7 +75,7 @@ class CollisionPointsManager:
                     collision_points = np.append(collision_points, np.array([(x, y, object.centroid.z, object.velocity.x, object.velocity.y, object.velocity.z, self.braking_safety_distance_obstacle, np.inf, 3 if object_speed < self.stopped_speed_limit else 4)], dtype=DTYPE))
                 point_cloud2 = msgify(PointCloud2,collision_points)
                 point_cloud2.header = msg.header
-                print(collision_points)
+                self.local_path_collision_pub.publish(point_cloud2)
 
 
     def run(self):
