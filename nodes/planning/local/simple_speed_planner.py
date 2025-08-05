@@ -75,30 +75,35 @@ class SpeedPlanner:
             min_vel = float('inf')
             min_distance = float('inf')
             collision_point_velocities = []
+            target_velocities = []
+            collision_point_distances = []
             for point in collision_points:
                 distance = local_path_linestring.project(Point(point['x'],point['y'])) - self.distance_to_car_front - point['distance_to_stop']
-                vel = math.sqrt(max(0,2*self.default_deceleration*distance))
-                if(vel < min_vel):
-                    min_vel = vel
-                    min_distance = distance
-                    min_category = point['category']
+                collision_point_distances.append(distance)
                 heading = self.get_heading_at_distance(local_path_linestring,distance)
                 velocity_vector = Vector3(point['vx'],point['vy'],point['vz'])
                 velocity_at_heading = self.project_vector_to_heading(heading,velocity_vector)
                 collision_point_velocities.append(velocity_at_heading)
-                print("Velocity vector: ", math.sqrt(velocity_vector.x**2+velocity_vector.y**2+velocity_vector.z**2),"Velocity at heading: ",velocity_at_heading)
+                #print("Velocity vector: ", math.sqrt(velocity_vector.x**2+velocity_vector.y**2+velocity_vector.z**2),"Velocity at heading: ",velocity_at_heading)
+            
+            breaking_distance = self.braking_reaction_time*self.current_speed
+            distances_to_object = np.maximum(0,np.array(collision_point_distances) - breaking_distance)
+
+            target_velocities = np.sqrt(np.array(collision_point_velocities)**2 + 2*self.default_deceleration*distances_to_object)
+            min_index = np.argmin(target_velocities)
+
             for i, wp in enumerate(local_path_msg.waypoints):
-                wp.speed = min(min_vel, wp.speed)
+                wp.speed = min(target_velocities[min_index], wp.speed)
             # Update the lane message with the calculated values
             path = Path()
             path.header = local_path_msg.header
             path.waypoints = local_path_msg.waypoints
             
-            path.closest_object_distance = min_distance + self.distance_to_car_front # Distance to the collision point with lowest target velocity (also closest object for now)
-            path.closest_object_velocity = 0 # Velocity of the collision point with lowest target velocity (0)
+            path.closest_object_distance = distances_to_object[min_index] + self.distance_to_car_front 
+            path.closest_object_velocity = target_velocities[min_index]
             path.is_blocked = True
-            path.stopping_point_distance = min_distance + self.distance_to_car_front # Stopping point distance can be set to the distance to the closest object for now
-            path.collision_point_category = min_category # Category of collision point with lowest target velocity
+            path.stopping_point_distance = distances_to_object[min_index] + self.distance_to_car_front # Stopping point distance can be set to the distance to the closest object for now
+            path.collision_point_category = collision_points[min_index]['category'] # Category of collision point with lowest target velocity
             self.local_path_pub.publish(path)
 
 
