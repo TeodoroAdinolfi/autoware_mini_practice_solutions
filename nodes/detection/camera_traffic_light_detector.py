@@ -140,6 +140,8 @@ class CameraTrafficLightDetector:
             transform_from_frame = self.transform_from_frame
         
         rois = []
+        classes = []            
+        scores = []
 
         traffic_light_res_array = TrafficLightResultArray()
         traffic_light_res_array.header.stamp = camera_image_msg.header.stamp
@@ -151,13 +153,33 @@ class CameraTrafficLightDetector:
             try:
                 transform = self.tf_buffer.lookup_transform(camera_image_msg.header.frame_id, self.transform_from_frame, camera_image_msg.header.stamp, rospy.Duration(self.transform_timeout))
                 rois = self.calculate_roi_coordinates(stoplines_on_path=self.stoplines_on_path,transform=transform)
+                if(len(rois) > 0):
+                    roi_images = self.create_roi_images(image,rois)
+                    predictions = self.model.run(None, {'conv2d_1_input': roi_images})[0]
+
+                    for prediction in predictions:
+                        prediction_arr = np.array(prediction)
+                        index = prediction_arr.argmax()
+                        classes.append(index)
+                        scores.append(prediction_arr[index])
+                    # extract results in sync with rois
+                    for cl, (stoplineId, plId, _, _, _, _) in zip(classes, rois):
+
+                        tfl_result = TrafficLightResult()
+                        tfl_result.light_id = plId
+                        tfl_result.stopline_id = stoplineId
+                        tfl_result.recognition_result =  cl
+                        tfl_result.recognition_result_str = CLASSIFIER_RESULT_TO_STRING[cl]
+                        traffic_light_res_array.results.append(tfl_result)
+                    rospy.logwarn("predictions: %s",predictions)
+
                 rospy.logwarn("rois: %s",rois)
             except (TransformException, rospy.ROSTimeMovedBackwardsException) as e:
                 rospy.logwarn("%s - %s", rospy.get_name(), e)
                 return
 
 
-        self.publish_roi_images(image=image,rois=rois,classes=[],scores=[],image_time_stamp=camera_image_msg.header.stamp)
+        self.publish_roi_images(image=image,rois=rois,classes=classes,scores=scores,image_time_stamp=camera_image_msg.header.stamp)
         
 
     def calculate_roi_coordinates(self, stoplines_on_path, transform):
@@ -204,7 +226,12 @@ class CameraTrafficLightDetector:
 
 
     def create_roi_images(self, image, rois):
-        pass
+        roi_images = []
+        for _, _, min_u, max_u, min_v, max_v in rois:
+            selected_area = image[min_v:max_v, min_u:max_u]
+            resized_roi = cv2.resize(selected_area, (128, 128), interpolation=cv2.INTER_LINEAR)
+            roi_images.append(resized_roi.astype(np.float32))
+        return np.stack(roi_images, axis=0) / 255.0
 
     def publish_roi_images(self, image, rois, classes, scores, image_time_stamp):
 
