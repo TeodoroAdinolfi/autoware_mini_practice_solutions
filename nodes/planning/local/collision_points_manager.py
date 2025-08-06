@@ -64,7 +64,7 @@ class CollisionPointsManager:
             return
 
         self.path_linestring = LineString([(w.position.x, w.position.y) for w in msg.waypoints])
-        self.local_path_buffered  = self.path_linestring.buffer(distance=self.safety_box_width,cap_style='flat')
+        self.local_path_buffered  = self.path_linestring.buffer(distance=self.safety_box_width/2,cap_style='flat')
         shapely.prepare(self.local_path_buffered)
         for object in detected_objects:
             pol = shapely.Polygon(np.array(object.convex_hull).reshape(-1,3)[:, :2])
