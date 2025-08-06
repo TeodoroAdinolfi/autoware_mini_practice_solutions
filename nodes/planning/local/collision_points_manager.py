@@ -50,7 +50,9 @@ class CollisionPointsManager:
         rospy.Subscriber('global_path',Path,self.global_path_callback,queue_size=1)
 
     def global_path_callback(self, msg: Path):
-        self.goal_waypoint = msg.waypoints[-1]
+        if(len(msg.waypoints) > 0):
+             with self.lock:
+                self.goal_waypoint = msg.waypoints[-1]
 
     def detected_objects_callback(self, msg):
         self.detected_objects = msg.objects
@@ -72,9 +74,7 @@ class CollisionPointsManager:
             self.local_path_buffered  = self.path_linestring.buffer(distance=self.safety_box_width/2,cap_style='flat')
             shapely.prepare(self.local_path_buffered)
             
-            last_path_waypoint = msg.waypoints[-1]
-            last_path_point = Point(last_path_waypoint.position.x,last_path_waypoint.position.y)
-            last_path_point_buffered = last_path_point.buffer(0.5)
+            goal_point_buffered = Point(self.goal_waypoint.position.x, self.goal_waypoint.position.y).buffer(0.5)
                 
             if (len(detected_objects) > 0): 
                 for object in detected_objects:
@@ -86,7 +86,7 @@ class CollisionPointsManager:
                             collision_points = np.append(collision_points, np.array([(x, y, object.centroid.z, object.velocity.x, object.velocity.y, object.velocity.z, self.braking_safety_distance_obstacle, np.inf, 3 if object_speed < self.stopped_speed_limit else 4)], dtype=DTYPE))
                         
             
-            if(shapely.intersects(last_path_point_buffered,Point(self.goal_waypoint.position.x, self.goal_waypoint.position.y))):
+            if(shapely.intersects(self.local_path_buffered,goal_point_buffered)):
                 collision_points = np.append(collision_points, np.array([(self.goal_waypoint.position.x, self.goal_waypoint.position.y, self.goal_waypoint.position.z,
                                                                             0.0, 0.0, 0.0,  # no velocity because its a static point
                                                                             self.braking_safety_distance_goal, np.inf,

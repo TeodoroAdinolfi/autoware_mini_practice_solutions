@@ -20,6 +20,8 @@ from tf2_geometry_msgs import do_transform_point
 
 from cv_bridge import CvBridge, CvBridgeError
 
+from shapely import Point
+
 # Classifier outputs 4 classes (LightState)
 CLASSIFIER_RESULT_TO_STRING = {
     0: "green",
@@ -103,14 +105,24 @@ class CameraTrafficLightDetector:
             camera_model.fromCameraInfo(camera_info_msg)
             self.camera_model = camera_model
 
-    def local_path_callback(self, local_path_msg):
+    def local_path_callback(self, local_path_msg : Path):
 
         # used in calculate_roi_coordinates to filter out only relevant signals
         stoplines_on_path = []
 
+        if(len(local_path_msg.waypoints) >0):
+            local_path_linestring = LineString([(wp.position.x , wp.position.y) for wp in local_path_msg.waypoints])
+            for stoplineId,stopline in self.tfl_stoplines.items():
+                if (local_path_linestring.intersects(stopline)):
+                    stoplines_on_path.append(stoplineId)
+        
+        
         with self.lock:
             self.stoplines_on_path = stoplines_on_path
             self.transform_from_frame = local_path_msg.header.frame_id
+
+        rospy.logwarn("Stoplines on path: %s", stoplines_on_path)
+        
 
     def camera_image_callback(self, camera_image_msg):
 
@@ -132,6 +144,7 @@ class CameraTrafficLightDetector:
         if(self.rectify_image):
             self.camera_model.rectifyImage(image, image)
         self.publish_roi_images(image=image,rois=[],classes=[],scores=[],image_time_stamp=camera_image_msg.header.stamp)
+        
 
     def calculate_roi_coordinates(self, stoplines_on_path, transform):
         pass
