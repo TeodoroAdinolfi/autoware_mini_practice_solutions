@@ -168,7 +168,7 @@ class CameraTrafficLightDetector:
                         tfl_result = TrafficLightResult()
                         tfl_result.light_id = plId
                         tfl_result.stopline_id = stoplineId
-                        tfl_result.recognition_result =  cl
+                        tfl_result.recognition_result =  CLASSIFIER_RESULT_TO_TLRESULT[cl]
                         tfl_result.recognition_result_str = CLASSIFIER_RESULT_TO_STRING[cl]
                         traffic_light_res_array.results.append(tfl_result)
                     rospy.logwarn("predictions: %s",predictions)
