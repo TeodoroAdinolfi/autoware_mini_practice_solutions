@@ -180,7 +180,7 @@ class CameraTrafficLightDetector:
 
 
         self.publish_roi_images(image=image,rois=rois,classes=classes,scores=scores,image_time_stamp=camera_image_msg.header.stamp)
-        
+        self.tfl_status_pub.publish(traffic_light_res_array) 
 
     def calculate_roi_coordinates(self, stoplines_on_path, transform):
         rois = []
