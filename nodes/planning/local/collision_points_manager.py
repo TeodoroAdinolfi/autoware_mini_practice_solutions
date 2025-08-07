@@ -156,29 +156,29 @@ class CollisionPointsManager:
 
         if(len(msg.waypoints)> 0):
 
-            self.path_linestring = LineString([(w.position.x, w.position.y) for w in msg.waypoints])
-            self.local_path_buffered  = self.path_linestring.buffer(distance=self.safety_box_width/2,cap_style='flat')
-            shapely.prepare(self.local_path_buffered)
+            path_linestring = LineString([(w.position.x, w.position.y) for w in msg.waypoints])
+            local_path_buffered  = path_linestring.buffer(distance=self.safety_box_width/2,cap_style='flat')
+            shapely.prepare(local_path_buffered)
             
             goal_point_buffered = Point(self.goal_waypoint.position.x, self.goal_waypoint.position.y).buffer(0.5)
                 
             if (len(detected_objects) > 0): 
                 for object in detected_objects:
                     pol = shapely.Polygon(np.array(object.convex_hull).reshape(-1,3)[:, :2])
-                    if (shapely.intersects(self.local_path_buffered,pol)):
-                        intersection_points = shapely.get_coordinates(shapely.intersection(self.local_path_buffered,pol))
+                    if (shapely.intersects(local_path_buffered,pol)):
+                        intersection_points = shapely.get_coordinates(shapely.intersection(local_path_buffered,pol))
                         for x, y in intersection_points:
                             object_speed = np.linalg.norm([object.velocity.x, object.velocity.y, object.velocity.z])
                             collision_points = np.append(collision_points, np.array([(x, y, object.centroid.z, object.velocity.x, object.velocity.y, object.velocity.z, self.braking_safety_distance_obstacle, np.inf, 3 if object_speed < self.stopped_speed_limit else 4)], dtype=DTYPE))
             
             for stoplineId,stopline_linestring in self.tfl_stoplines.items():
-                if stoplineId in self.stopline_statuses and self.stopline_statuses[stoplineId] == 0 and stopline_linestring.intersects(self.path_linestring):
-                    intersection_point = self.path_linestring.intersection(stopline_linestring)
+                if stoplineId in self.stopline_statuses and self.stopline_statuses[stoplineId] == 0 and stopline_linestring.intersects(path_linestring):
+                    intersection_point = path_linestring.intersection(stopline_linestring)
                     assert isinstance(intersection_point, shapely.Point), "Stop line and local path intersection is not a shapely.Point"
                     collision_points = np.append(collision_points, np.array([intersection_point.x,intersection_point.y,0,0.0,0.0,0.0,self.braking_safety_distance_stopline,np.inf,2],dtype=DTYPE))
 
             
-            if(shapely.intersects(self.local_path_buffered,goal_point_buffered)):
+            if(shapely.intersects(local_path_buffered,goal_point_buffered)):
                 collision_points = np.append(collision_points, np.array([(self.goal_waypoint.position.x, self.goal_waypoint.position.y, self.goal_waypoint.position.z,
                                                                             0.0, 0.0, 0.0,  # no velocity because its a static point
                                                                             self.braking_safety_distance_goal, np.inf,
