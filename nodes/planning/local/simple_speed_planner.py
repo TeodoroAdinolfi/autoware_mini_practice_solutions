@@ -84,10 +84,11 @@ class SpeedPlanner:
             collision_point_velocities = []
             collision_point_distances = []
             collision_point_categories = []
+            distances_to_cp = []
 
             for cp in collision_points:
                 distance_to_cp = local_path_linestring.project(Point(cp['x'], cp['y']))
-
+                distances_to_cp.append(distance_to_cp)
                 # remove the distance from base link to car nose, and then from car nose considering the distance to stop
                 # in this way the real distance available is smaller than before
                 corrected_distance_to_cp = distance_to_cp - self.distance_to_car_front - cp['distance_to_stop']
@@ -95,10 +96,7 @@ class SpeedPlanner:
                 # Calculate heading and projected velocity of the object
                 heading = self.get_heading_at_distance(local_path_linestring, distance_to_cp)
                 obj_velocity_vector = Vector3(x=cp['vx'], y=cp['vy'], z=cp['vz'])
-                obj_speed = np.linalg.norm([cp['vx'], cp['vy'], cp['vz']])
                 rel_speed = self.project_vector_to_heading(heading, obj_velocity_vector)
-
-                #rospy.loginfo("Object actual speed: %.3f m/s, relative speed along heading: %.3f m/s", obj_speed, rel_speed)
 
                 collision_point_distances.append(corrected_distance_to_cp)
                 collision_point_velocities.append(rel_speed)
@@ -114,10 +112,10 @@ class SpeedPlanner:
 
             min_index = np.argmin(target_velocities)
             min_target_velocity = target_velocities[min_index]
-            closest_object_distance = collision_point_distances[min_index] + self.distance_to_car_front
+            closest_object_distance = distances_to_cp[min_index] - self.distance_to_car_front
             closest_object_velocity = collision_point_velocities[min_index]
             collision_point_category = collision_point_categories[min_index]
-            stopping_point_distance = closest_object_distance 
+            stopping_point_distance = distances_to_cp[min_index] 
 
 
             for wp in local_path_msg.waypoints:
