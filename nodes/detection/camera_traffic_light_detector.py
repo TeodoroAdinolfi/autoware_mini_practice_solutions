@@ -121,8 +121,6 @@ class CameraTrafficLightDetector:
         with self.lock:
             self.stoplines_on_path = stoplines_on_path
             self.transform_from_frame = local_path_msg.header.frame_id
-
-        rospy.logwarn("Stoplines on path: %s", stoplines_on_path)
         
 
     def camera_image_callback(self, camera_image_msg):
@@ -145,15 +143,20 @@ class CameraTrafficLightDetector:
 
         traffic_light_res_array = TrafficLightResultArray()
         traffic_light_res_array.header.stamp = camera_image_msg.header.stamp
+
         image = self.bridge.imgmsg_to_cv2(camera_image_msg,  desired_encoding='rgb8')
+        
         if(self.rectify_image):
             self.camera_model.rectifyImage(image, image)
 
         if(len(stoplines_on_path) > 0):
             try:
-                transform = self.tf_buffer.lookup_transform(camera_image_msg.header.frame_id, self.transform_from_frame, camera_image_msg.header.stamp, rospy.Duration(self.transform_timeout))
+
+                transform = self.tf_buffer.lookup_transform(camera_image_msg.header.frame_id, transform_from_frame, camera_image_msg.header.stamp, rospy.Duration(self.transform_timeout))
                 rois = self.calculate_roi_coordinates(stoplines_on_path=self.stoplines_on_path,transform=transform)
+                
                 if(len(rois) > 0):
+                    
                     roi_images = self.create_roi_images(image,rois)
                     predictions = self.model.run(None, {'conv2d_1_input': roi_images})[0]
 
@@ -171,13 +174,10 @@ class CameraTrafficLightDetector:
                         tfl_result.recognition_result =  CLASSIFIER_RESULT_TO_TLRESULT[cl]
                         tfl_result.recognition_result_str = CLASSIFIER_RESULT_TO_STRING[cl]
                         traffic_light_res_array.results.append(tfl_result)
-                    rospy.logwarn("predictions: %s",predictions)
 
-                rospy.logwarn("rois: %s",rois)
             except (TransformException, rospy.ROSTimeMovedBackwardsException) as e:
                 rospy.logwarn("%s - %s", rospy.get_name(), e)
                 return
-
 
         self.publish_roi_images(image=image,rois=rois,classes=classes,scores=scores,image_time_stamp=camera_image_msg.header.stamp)
         self.tfl_status_pub.publish(traffic_light_res_array) 
