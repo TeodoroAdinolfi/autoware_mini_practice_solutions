@@ -83,12 +83,20 @@ class Lanelet2GlobalPlanner:
             goal_proj = path.project(Point(self.goal_point.x, self.goal_point.y))
             nearest_point_to_goal_on_lanelet = path.interpolate(goal_proj)
 
+            new_waypoints = []
+
+            for wp in waypoints:
+                projected_wp = path.project(Point(wp.position.x,wp.position.y))
+                if(projected_wp < goal_proj):
+                    new_waypoints.append(wp)
+
             last_waypoint = Waypoint()
             last_waypoint.position.x = nearest_point_to_goal_on_lanelet.x
             last_waypoint.position.y = nearest_point_to_goal_on_lanelet.y
             last_waypoint.position.z = waypoints[-1].position.z
             last_waypoint.speed = waypoints[-1].speed
-            waypoints[-1] = last_waypoint
+            new_waypoints.append(last_waypoint)
+            waypoints = new_waypoints
         #
         self.publish_waypoints(waypoints)
 
