@@ -175,7 +175,7 @@ class CollisionPointsManager:
                 if stoplineId in self.stopline_statuses and self.stopline_statuses[stoplineId] == 0 and stopline_linestring.intersects(self.path_linestring):
                     intersection_point = self.path_linestring.intersection(stopline_linestring)
                     assert isinstance(intersection_point, shapely.Point), "Stop line and local path intersection is not a shapely.Point"
-                    collision_points = np.append(collision_points, np.array([intersection_point.x,intersection_point.y,0,0.0,0.0,0.0,self.braking_safety_distance_stopline,np.inf,2]))
+                    collision_points = np.append(collision_points, np.array([intersection_point.x,intersection_point.y,0,0.0,0.0,0.0,self.braking_safety_distance_stopline,np.inf,2],dtype=DTYPE))
 
             
             if(shapely.intersects(self.local_path_buffered,goal_point_buffered)):
