@@ -170,12 +170,16 @@ class CollisionPointsManager:
                         for x, y in intersection_points:
                             object_speed = np.linalg.norm([object.velocity.x, object.velocity.y, object.velocity.z])
                             collision_points = np.append(collision_points, np.array([(x, y, object.centroid.z, object.velocity.x, object.velocity.y, object.velocity.z, self.braking_safety_distance_obstacle, np.inf, 3 if object_speed < self.stopped_speed_limit else 4)], dtype=DTYPE))
-            
-            for stoplineId,stopline_linestring in self.tfl_stoplines.items():
-                if stoplineId in self.stopline_statuses and self.stopline_statuses[stoplineId] == 0 and stopline_linestring.intersects(path_linestring):
-                    intersection_point = path_linestring.intersection(stopline_linestring)
-                    assert isinstance(intersection_point, shapely.Point), "Stop line and local path intersection is not a shapely.Point"
-                    collision_points = np.append(collision_points, np.array([intersection_point.x,intersection_point.y,0,0.0,0.0,0.0,self.braking_safety_distance_stopline,np.inf,2],dtype=DTYPE))
+            if(len(self.stopline_statuses)>0):
+                for stoplineId,stopline_linestring in self.tfl_stoplines.items():
+                    if stoplineId in self.stopline_statuses and self.stopline_statuses[stoplineId] == 0 and stopline_linestring.intersects(path_linestring):
+                        intersection_point = path_linestring.intersection(stopline_linestring)
+                        assert isinstance(intersection_point, shapely.Point), "Stop line and local path intersection is not a shapely.Point"
+                        collision_points = np.append(collision_points, np.array([(intersection_point.x, intersection_point.y, 0,
+                                                    0.0, 0.0, 0.0,  # no velocity because its a static point
+                                                    self.braking_safety_distance_stopline, np.inf,
+                                                    2)], 
+                                                    dtype=DTYPE))
 
             
             if(shapely.intersects(local_path_buffered,goal_point_buffered)):
